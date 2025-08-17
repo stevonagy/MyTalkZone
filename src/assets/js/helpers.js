@@ -96,8 +96,8 @@ export default {
                         "turn:209.38.208.252:3478?transport=udp",
                         "turn:209.38.208.252:3478?transport=tcp"
                     ],
-                    username: "turnuser",
-                    credential: "sN#1310979312205#"
+                    username: "eneter user name",
+                    credential: "enter password"
                 }
             ]
         };
