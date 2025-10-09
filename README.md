@@ -60,10 +60,10 @@ improving performance and reducing bandwidth usage without compromising user exp
 New Features:
 -------------
 - Adaptive video resolution:
-  • 1–4 participants: 720p @ 30fps, ~1800 kbps
-  • 5–7 participants: 540p @ 24fps, ~1200 kbps
-  • 8+ participants: 360p @ 20fps, ~600 kbps
-- Optional audio-only mode when participants exceed a configurable threshold (default: 8).
+  • 1–10 participants: 720p @ 30fps, ~1800 kbps
+  • 11–14 participants: 540p @ 24fps, ~1200 kbps
+  • 15+ participants: 360p @ 20fps, ~600 kbps
+- Optional audio-only mode when participants exceed a configurable threshold (default: 15).
 - Bitrate limits applied per sender to avoid network congestion.
 - Smooth constraint changes via applyConstraints without requiring new media capture.
 
