@@ -165,11 +165,56 @@ window.addEventListener('load', () => {
 
   const grid = document.getElementById('videos');
 
+
+  // ===== Spotlight (screen-share full view) =====
+  let __spotlightId = null;
+  let __spotlightWanted = null;
+  function enterSpotlight(cardOrId) {
+    const cont = document.getElementById('videos');
+    if (!cont) return;
+    const el = (typeof cardOrId === 'string') ? document.getElementById(cardOrId) : cardOrId;
+    if (!el) return;
+    cont.querySelectorAll('.card, .card-sm').forEach(e => e.classList.remove('spotlight-target'));
+    el.classList.add('spotlight-target');
+    cont.classList.add('spotlight');
+    __spotlightId = el.id || null;
+  }
+  function exitSpotlight() {
+    const cont = document.getElementById('videos');
+    if (!cont) return;
+    cont.classList.remove('spotlight');
+    const prev = cont.querySelector('.spotlight-target');
+    if (prev) prev.classList.remove('spotlight-target');
+    __spotlightId = null;
+  }
+
+  // ---- Fullscreen helpers ----
+  function isFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+  }
+  function requestFs(el) {
+    if (el.requestFullscreen) return el.requestFullscreen();
+    if (el.webkitRequestFullscreen) return el.webkitRequestFullscreen();
+    if (el.mozRequestFullScreen) return el.mozRequestFullScreen();
+    if (el.msRequestFullscreen) return el.msRequestFullscreen();
+  }
+  function exitFs() {
+    if (document.exitFullscreen) return document.exitFullscreen();
+    if (document.webkitExitFullscreen) return document.webkitExitFullscreen();
+    if (document.mozCancelFullScreen) return document.mozCancelFullScreen();
+    if (document.msExitFullscreen) return document.msExitFullscreen();
+  }
+  function toggleFullscreen(el) {
+    try { if (isFullscreen()) exitFs(); else requestFs(el); } catch(e) { console.error('fullscreen toggle failed', e); }
+  }
+
+
+
   // ===== SCALE =====
   const SCALE_PROFILES = [
-    { maxPeers: 4,  label: '720p', constraints: { width: 1280, height: 720,  frameRate: 30 }, maxBitrateKbps: 1800 },
-    { maxPeers: 7,  label: '540p', constraints: { width:  960, height: 540,  frameRate: 24 }, maxBitrateKbps: 1200 },
-    { maxPeers: 99, label: '360p', constraints: { width:  640, height: 360,  frameRate: 20 }, maxBitrateKbps:  600, audioOnlyAbove: 8 },
+    { maxPeers: 8,  label: '720p', constraints: { width: 1280, height: 720,  frameRate: 30 }, maxBitrateKbps: 1800 },
+    { maxPeers: 14,  label: '540p', constraints: { width:  960, height: 540,  frameRate: 24 }, maxBitrateKbps: 1200 },
+    { maxPeers: 99, label: '360p', constraints: { width:  640, height: 360,  frameRate: 20 }, maxBitrateKbps:  600, audioOnlyAbove: 15 },
   ];
   function chooseScaleProfile(peerCount){ for(const p of SCALE_PROFILES) if(peerCount<=p.maxPeers) return p; return SCALE_PROFILES[SCALE_PROFILES.length-1]; }
   function currentPeerCount(){ try { return Object.keys(pc||{}).length; } catch { return 0; } }
@@ -315,6 +360,13 @@ window.addEventListener('load', () => {
     cardDiv.appendChild(localGridVid);
     cardDiv.appendChild(controlDiv);
 
+    
+    // Fullscreen handlers on local tile
+    try {
+      const exp = controlDiv.querySelector('.fa-expand');
+      if (exp) exp.onclick = (ev) => { ev.stopPropagation(); toggleFullscreen(cardDiv); };
+      localGridVid.ondblclick = () => toggleFullscreen(cardDiv);
+    } catch {}
     if (grid.firstChild) grid.insertBefore(cardDiv, grid.firstChild);
     else grid.appendChild(cardDiv);
   }
@@ -395,10 +447,12 @@ window.addEventListener('load', () => {
   }
 
   // ------- Signaling wiring -------
-  socket.on('connect', async () => {
-    socketId = socket.io.engine.id;
-    const rn = document.getElementById('randomNumber');
-    if (rn) rn.innerText = randomNumber;
+ socket.on('connect', async () => {
+  socketId = socket.io.engine.id;
+  const rn = document.getElementById('randomNumber');
+  const displayTitle = (roomTitle && roomTitle.trim()) || room;
+  if (rn) rn.innerText = displayTitle;
+
 
     scheduleScaleApply(0);
 
@@ -457,7 +511,29 @@ window.addEventListener('load', () => {
       }
     });
 
-    socket.on('chat', (data) => h.addChat(data, 'remote'));
+    socket.on('chat', (data = {}) => {
+      try {
+        if (data.__sys === 'spotlight') {
+          if (data.on) {
+            __spotlightWanted = data.id || null;
+            const tryApply = () => {
+              if (!__spotlightWanted) return;
+              const el = document.getElementById(__spotlightWanted);
+              if (el) { enterSpotlight(el); __spotlightWanted = null; }
+            };
+            tryApply();
+            setTimeout(tryApply, 200);
+            setTimeout(tryApply, 600);
+            setTimeout(tryApply, 1200);
+          } else {
+            __spotlightWanted = null;
+            exitSpotlight();
+          }
+          return;
+        }
+      } catch {}
+      h.addChat(data, 'remote');
+    });
 
     showPrejoinOverlay();
   });
@@ -518,7 +594,16 @@ window.addEventListener('load', () => {
         cardDiv.appendChild(v);
         cardDiv.appendChild(controlDiv);
         document.getElementById('videos').appendChild(cardDiv);
-      }
+      
+      
+      try { if (__spotlightWanted === partnerId) { enterSpotlight(cardDiv); __spotlightWanted = null; } } catch {}
+// Fullscreen handlers on remote tile
+      try {
+        const exp = controlDiv.querySelector('.fa-expand');
+        if (exp) exp.onclick = (ev) => { ev.stopPropagation(); toggleFullscreen(cardDiv); };
+        v.ondblclick = () => toggleFullscreen(cardDiv);
+      } catch {}
+    }
       v.srcObject = str;
     };
 
@@ -548,6 +633,7 @@ window.addEventListener('load', () => {
       h.toggleShareIcons(true);
       screen = stream;
       broadcastNewTracks(stream, 'video', false);
+      try { enterSpotlight('local-grid'); socket.emit('chat', { __sys:'spotlight', on:true, id: socketId }); } catch {}
       const [track] = stream.getVideoTracks();
       if (track) track.addEventListener('ended', () => { stopSharingScreen().catch(()=>{}); });
     }).catch((e) => {
@@ -562,6 +648,7 @@ window.addEventListener('load', () => {
     }).then(() => {
       h.toggleShareIcons(false);
       if (myStream) broadcastNewTracks(myStream, 'video');
+      try { socket.emit('chat', { __sys:'spotlight', on:false, id: socketId }); exitSpotlight(); } catch {}
       screen = null;
     }).catch((e) => console.error(e));
   }
@@ -705,7 +792,7 @@ window.addEventListener('load', () => {
     if (exists) socket.emit('subscribe', { room, socketId });
     else {
       const finalTitle = (roomTitle && roomTitle.trim()) || room;
-      socket.emit('subscribe', { room, socketId, title: finalTitle });
+      socket.emit('subscribe', { room, socketId, title: finalTitle, createdByName: (username || null) });
     }
   }
 

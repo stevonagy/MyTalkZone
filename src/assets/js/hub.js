@@ -15,6 +15,14 @@
 
   let cachedRooms = [];
 
+  // ---------- NEW (simplified): avatar URL builder with fallback ----------
+  function getDesoAvatarUrl(pubKey) {
+    if (!pubKey) return null;
+    // Always returns an image (default fallback if none set)
+    return `https://node.deso.org/api/v0/get-single-profile-picture/${encodeURIComponent(pubKey)}?fallback=1`;
+  }
+  // ----------------------------------------------------------------------
+
   function escapeHtml(str='') {
     return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
   }
@@ -72,7 +80,8 @@
         ? `<span class="pill pill-live">🟢 Live ${r.participants}</span>`
         : `<span class="pill">👥 ${r.participants || 0}</span>`;
       let metaLine = `ID: ${escapeHtml(r.id)} · ${live}`;
-      if (creator) metaLine += ` · by ${escapeHtml(creator)}`;
+      // render base "by ..." (we’ll add avatar below)
+      if (creator) metaLine += ` · <span class="mtz-creator-inline">by ${escapeHtml(creator)}</span>`;
 
       let ttlLine = '';
       if ((r.participants || 0) === 0 && ttlMs > 0) {
@@ -91,6 +100,22 @@
         </div>
       `;
       listEl.appendChild(card);
+
+      // --- Add avatar inline (no async needed) ---
+      if (creator && r.createdBy) {
+        const target = card.querySelector('.mtz-creator-inline');
+        if (target) {
+          const url = getDesoAvatarUrl(r.createdBy);
+          if (url) {
+            const avatarHtml =
+              `<img src="${url}" alt="" style="width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px;box-shadow:0 0 0 1px rgba(255,255,255,.2);" loading="lazy">`;
+            // Keep "by ..." text, just prepend the avatar
+            target.innerHTML = `${avatarHtml}<span class="mtz-creator-name">${target.innerText}</span>`;
+          }
+        }
+      }
+      // ------------------------------------------
+
     });
 
     listEl.querySelectorAll('[data-join]').forEach(btn => {

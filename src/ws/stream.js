@@ -45,7 +45,7 @@ module.exports = function attachStreamNamespace(io) {
   });
 
   nsp.on('connection', (socket) => {
-    socket.on('subscribe', ({ room, title }) => {
+    socket.on('subscribe', ({ room, title, createdByName }) => {
       const roomName = String(room || '').trim();
       if (!roomName) {
         socket.emit('room-create-denied', { reason: 'MISSING_ROOM' });
@@ -65,7 +65,7 @@ module.exports = function attachStreamNamespace(io) {
           return;
         }
         if (typeof roomsStore.upsertOnCreate === 'function') {
-          roomsStore.upsertOnCreate({ id: roomName, title: String(title).trim(), createdBy: pk });
+          roomsStore.upsertOnCreate({ id: roomName, title: String(title).trim(), createdBy: pk, createdByName: createdByName || null });
         }
       }
 

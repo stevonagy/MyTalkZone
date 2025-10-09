@@ -44,14 +44,14 @@ function list() {
   );
 }
 
-function upsertOnCreate({ id, title, createdBy }) {
+function upsertOnCreate({ id, title, createdBy, createdByName }) {
   const now = Date.now();
   if (!rooms.has(id)) {
     rooms.set(id, {
       id,
       title: title || id,
       createdBy: createdBy || '',
-      createdByName: null, // will be filled asynchronously
+      createdByName: (createdByName !== undefined ? createdByName : null),
       createdAt: now,
       lastActive: now,
       participants: 0,

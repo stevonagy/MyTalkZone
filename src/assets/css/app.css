@@ -298,3 +298,40 @@ body.call-page{
 
   .chat-input { font-size: 16px; }
 }
+
+
+/* === Chat drawer layout fix — FINAL (pure flex, no sticky) === */
+.chat-col{
+  display: flex !important;
+  flex-direction: column !important;
+  top: 72px; bottom: 0; /* već postoji u ranijem pravilu */
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 12px !important;
+}
+
+#chat-messages{
+  flex: 1 1 auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  margin: 0 0 10px !important;
+  padding: 8px 6px !important; /* zadrži postojeći razmak */
+}
+
+.chat-input-row{
+  flex: 0 0 auto !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  border-top: 1px solid var(--mz-border) !important;
+  padding: 10px 0 0 !important; /* bez sticky, samo prirodno na dnu */
+  background: rgba(15,23,42,.97) !important;
+}
+
+#chat-input{
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
+
