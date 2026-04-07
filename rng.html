@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Random number generator — auto post</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --bg:#0b1020; --card:#111832; --ink:#eaf0ff; --muted:#96a2c9; --outline:#243063; --ok:#7dffa7; --err:#ff8d8d; }
+    *{ box-sizing:border-box }
+    body{ margin:0; color:var(--ink); font-family: Inter, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: radial-gradient(1200px 800px at 20% -10%, #1b2460 0, transparent 70%), radial-gradient(1000px 700px at 120% 10%, #18204d 0, transparent 60%), var(--bg); }
+    .wrap{ max-width:980px; margin:48px auto; padding:0 20px; display:grid; gap:22px }
+    .card{ background:var(--card); border:1px solid var(--outline); border-radius:16px; padding:22px; box-shadow:0 14px 40px rgba(0,0,0,.35) }
+    h1{ margin:0 0 6px; font-size:28px } .lead{ color:var(--muted); margin:0 0 12px }
+    .row{ display:flex; gap:12px; align-items:center; flex-wrap:wrap } .stack{ display:grid; gap:10px }
+    label{ color:var(--muted); font-size:14px }
+    input[type="number"],textarea{ width:100%; background:#0f1737; color:var(--ink); border:1px solid #2b376f; border-radius:12px; padding:12px 14px; outline:none }
+    textarea{ min-height:120px; resize:vertical }
+    .btn{ appearance:none; border:1px solid #2a3a84; background:linear-gradient(180deg,#7ab0ff,#4b86ff); color:#07112b; font-weight:800; padding:10px 16px; border-radius:12px; cursor:pointer; box-shadow:0 8px 22px rgba(110,168,255,.35) }
+    .btn.ghost{ background:#121c44; color:var(--ink); border:1px solid #2b376f; box-shadow:none }
+    .btn[disabled]{ opacity:.6; cursor:not-allowed }
+    .pill{ display:inline-flex; align-items:center; gap:8px; font-size:12px; color:#c5d0ff; background:#0f1737; border:1px solid #26336a; padding:6px 10px; border-radius:999px }
+    .status{ color:var(--muted); margin-top:6px } .ok{ color:var(--ok) } .err{ color:var(--err) }
+    .result{ font-size:40px; font-weight:800; margin-top:10px }
+    code{ background:#0f1737; border:1px solid #2b376f; padding:2px 6px; border-radius:6px }
+    .wallet{ display:grid; grid-template-columns: 72px 1fr; gap:14px; align-items:center; margin-top:10px }
+    .wallet img{ width:72px; height:72px; border-radius:50%; border:1px solid #2b376f; background:#0f1737; object-fit:cover }
+    .muted{ color:#9fb0e6 }
+    .steps{ display:flex; flex-direction:column; gap:6px; margin:10px 0 20px }
+    .steps .pill{ background:#0f1737; border:1px solid #2b376f; padding:8px 12px; font-size:14px }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Login and generate random number</h1>
+      <p class="lead"></p>
+      <p class="lead" style="color:#b8c4ff;">
+        After logging in, set your minimum and maximum values, then click <strong>Generate</strong>.<br>
+        The system will instantly create a random number, lock your inputs, and automatically publish the result to the DeSo blockchain as a verified post.
+      </p>
+      <div class="steps">
+        <div class="pill">🪪 <strong>Step 1:</strong> Sign in with DeSo</div>
+        <div class="pill">🔢 <strong>Step 2:</strong> Set your minimum and maximum range</div>
+        <div class="pill">🚀 <strong>Step 3:</strong> Click <strong>Generate</strong> → the number is created and automatically posted on the blockchain</div>
+      </div>
+
+      <div class="row" style="margin-bottom:12px">
+        <button id="deso-login" class="btn">Sign in with DeSo</button>
+        <button id="deso-logout" class="btn ghost" disabled>Sign out</button>
+        <span id="session-pill" class="pill" title="Session status">
+          <span id="session-dot" style="width:8px;height:8px;background:#ffb2b2;border-radius:999px;display:inline-block"></span>
+          <span id="session-text">Signed out</span>
+        </span>
+      </div>
+
+      <div id="wallet-info" style="display:none; margin-top:8px"></div>
+
+      <hr/>
+
+      <h2 style="margin:0 0 8px">🎲 Random Number Generator</h2>
+      <div class="row">
+        <div class="stack">
+          <label for="rng-min">Minimum (inclusive)</label>
+          <input id="rng-min" type="number" value="1" />
+        </div>
+        <div class="stack">
+          <label for="rng-max">Maximum (inclusive)</label>
+          <input id="rng-max" type="number" value="100" />
+        </div>
+        <div class="stack" style="align-self:end">
+          <button id="rng-generate" class="btn">Generate</button>
+          <div id="rng-seed" class="status"></div>
+          <div class="hint" style="font-size:12px; color:#9fb0e6; margin-top:4px">
+            After generating, inputs will lock and the post will be submitted automatically.
+          </div>
+        </div>
+      </div>
+      <div id="rng-result" class="result">—</div>
+
+      <hr/>
+
+      <h2 style="margin:0 0 8px">Post</h2>
+      <div class="stack">
+        <label for="postBody">Post text</label>
+        <textarea id="postBody" placeholder="Generated random number will show here." readonly></textarea>
+
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button id="postBtn" class="btn" disabled style="display:none">Post</button>
+        <div id="postStatus" class="status"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+const IDENTITY_ORIGIN = "https://identity.deso.org";
+const NODE = "https://node.deso.org";
+const popupSize = { w:800, h:600 };
+let identityPopup = null;     // Single window (login + approve)
+let loggedInPublicKey = null;
+
+/* ===== Helpers ===== */
+function openPopup(url){
+  const x = window.outerWidth / 2 - popupSize.w / 2;
+  const y = window.outerHeight / 2 - popupSize.h / 2;
+  identityPopup = window.open(url, 'DeSoIdentity', `width=${popupSize.w},height=${popupSize.h},left=${x},top=${y}`);
+  return identityPopup;
+}
+
+/* ===== RNG ===== */
+function randomIntInclusive(min, max) {
+  min = Math.ceil(Number(min)); max = Math.floor(Number(max));
+  if (!Number.isInteger(min) || !Number.isInteger(max)) throw new Error("Please enter integers.");
+  if (max < min) throw new Error("Max must be >= min.");
+  const range = max - min + 1; if (range <= 0) throw new Error("Range too large.");
+  const limit = Math.floor(0x100000000 / range) * range - 1;
+  const buf = new Uint32Array(1);
+  while (true) { crypto.getRandomValues(buf); const x = buf[0]; if (x <= limit) return min + (x % range); }
+}
+let rngLastNumber = null, rngLastParams = null;
+let rngLocked = false;
+
+document.getElementById('rng-generate').addEventListener('click', async () => {
+  if (rngLocked) return; // prevent changing the number
+  try{
+    if (!loggedInPublicKey) { alert("Please sign in first."); return; }
+    const min = document.getElementById('rng-min').value;
+    const max = document.getElementById('rng-max').value;
+    const n = randomIntInclusive(min, max);
+    rngLastNumber = n; rngLastParams = { min:+min, max:+max, timestamp:new Date().toISOString() };
+    document.getElementById('rng-result').textContent = String(n);
+    document.getElementById('rng-seed').textContent = `min=${rngLastParams.min}, max=${rngLastParams.max} • ${rngLastParams.timestamp}`;
+    const postBody = document.getElementById('postBody');
+    postBody.value = `🎲 Random draw: ${rngLastNumber}\n\nRange: ${rngLastParams.min}–${rngLastParams.max}\nTime: ${rngLastParams.timestamp}`;
+
+    // LOCK inputs and button so the number cannot be changed
+    document.getElementById('rng-min').disabled = true;
+    document.getElementById('rng-max').disabled = true;
+    document.getElementById('rng-generate').disabled = true;
+    rngLocked = true;
+
+    // Auto post
+    await autoPost();
+  }catch(e){ alert(e.message || "Error generating number."); }
+});
+
+/* ===== LOGIN (accessLevelRequest=2) ===== */
+document.getElementById("deso-login").onclick = () => {
+  openPopup(IDENTITY_ORIGIN + '/log-in?accessLevelRequest=2');
+};
+
+window.addEventListener("message", (event) => {
+  if (event.origin !== IDENTITY_ORIGIN) return;
+  const data = event.data;
+  if (!data || data.service !== "identity") return;
+  const { id, method, payload, service } = data;
+
+  if (method === "initialize") {
+    identityPopup?.postMessage({ id, service, payload: {} }, IDENTITY_ORIGIN);
+  }
+
+  if (method === "login" && payload.publicKeyAdded) {
+    loggedInPublicKey = payload.publicKeyAdded;
+    localStorage.setItem("deso_user_key", loggedInPublicKey);
+    document.getElementById("session-text").textContent = "Signed in";
+    document.getElementById("session-dot").style.background = "#7dffa7";
+    document.getElementById("deso-logout").disabled = false;
+    try { setTimeout(() => identityPopup && !identityPopup.closed && identityPopup.close(), 400); } catch {}
+    renderWallet();
+  }
+
+  if (payload?.signedTransactionHex) {
+    resolvePendingApprove(payload.signedTransactionHex);
+    try { identityPopup && !identityPopup.closed && identityPopup.close(); } catch {}
+  }
+});
+
+window.addEventListener("load", () => {
+  const savedKey = localStorage.getItem("deso_user_key");
+  if (savedKey) {
+    loggedInPublicKey = savedKey;
+    document.getElementById("session-text").textContent = "Signed in";
+    document.getElementById("session-dot").style.background = "#7dffa7";
+    document.getElementById("deso-logout").disabled = false;
+    renderWallet();
+  }
+});
+
+/* ===== Wallet UI ===== */
+async function renderWallet(){
+  if (!loggedInPublicKey) {
+    document.getElementById("wallet-info").style.display = "none";
+    return;
+  }
+  const walletEl = document.getElementById("wallet-info");
+  walletEl.style.display = "block";
+  walletEl.innerHTML = `<div class="status">Loading wallet…</div>`;
+  try {
+    const avatarUrl = `${NODE}/api/v0/get-single-profile-picture/${loggedInPublicKey}?fallback=1`;
+    const [profileRes] = await Promise.all([
+      fetch(`${NODE}/api/v0/get-single-profile`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ PublicKeyBase58Check: loggedInPublicKey })
+      })
+    ]);
+    const profileJson = await profileRes.json();
+    const username = profileJson?.Profile?.Username || "";
+    walletEl.innerHTML = `
+      <div class="wallet">
+        <img src="${avatarUrl}" alt="Profile picture" />
+        <div>
+          <div><strong>Username:</strong> ${username ? "@" + username : "<span class='muted'>(no username)</span>"}</div>
+          <div class="muted">Public key: <code>${loggedInPublicKey}</code></div>
+        </div>
+      </div>`;
+  } catch (err) {
+    walletEl.innerHTML = `<div class="status err">Failed to load wallet.</div>`;
+    console.error(err);
+  }
+}
+
+/* ===== LOGOUT ===== */
+document.getElementById("deso-logout").addEventListener('click', () => {
+  localStorage.removeItem("deso_user_key");
+  loggedInPublicKey = null;
+  document.getElementById("session-text").textContent = "Signed out";
+  document.getElementById("session-dot").style.background = "#ffb2b2";
+  document.getElementById("deso-logout").disabled = true;
+  document.getElementById("wallet-info").style.display = "none";
+  // Unlock RNG controls (optional)
+  document.getElementById('rng-min').disabled = false;
+  document.getElementById('rng-max').disabled = false;
+  document.getElementById('rng-generate').disabled = false;
+  rngLocked = false;
+});
+
+/* ===== Transaction helpers ===== */
+async function buildPostTx({ publicKey, body, extra }) {
+  const res = await fetch(`${NODE}/api/v0/submit-post`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      UpdaterPublicKeyBase58Check: publicKey,
+      BodyObj: { Body: body, VideoURLs: [], ImageURLs: [] },
+      PostExtraData: extra || {},
+      MinFeeRateNanosPerKB: 1000,
+      DoNotBroadcast: true
+    })
+  });
+  const json = await res.json();
+  if (!json.TransactionHex) throw new Error(json.Error || "submit-post: TransactionHex missing.");
+  return json.TransactionHex;
+}
+async function submitTx(signedHex) {
+  const res = await fetch(`${NODE}/api/v0/submit-transaction`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ TransactionHex: signedHex })
+  });
+  const json = await res.json();
+  if (json.Error) throw new Error(json.Error);
+  return json.TxnHashHex || json.PostEntryResponse?.PostHashHex || null;
+}
+
+/* ===== Approve flow (reuse same popup) ===== */
+let pendingApprove = null;
+function waitForApprove(){
+  return new Promise((resolve, reject) => {
+    pendingApprove = resolve;
+    setTimeout(() => { if (pendingApprove) { pendingApprove = null; reject(new Error("Approve timed out.")); } }, 120000);
+  });
+}
+function resolvePendingApprove(signedHex){
+  if (pendingApprove) {
+    const fn = pendingApprove; pendingApprove = null;
+    fn(signedHex);
+  }
+}
+
+async function autoPost(){
+  const $state = document.getElementById('postStatus');
+  try{
+    if (!loggedInPublicKey) throw new Error("Please sign in first.");
+    const val = document.getElementById('postBody').value.trim();
+    const body = val || (rngLastNumber!==null
+      ? `🎲 Random draw: ${rngLastNumber}\n\nRange: ${rngLastParams.min}–${rngLastParams.max}\nTime: ${rngLastParams.timestamp}`
+      : "");
+    if (!body) throw new Error("Post text is empty.");
+
+    const extra = (rngLastNumber!==null) ? {
+      RNG_Number: String(rngLastNumber),
+      RNG_Min: String(rngLastParams.min),
+      RNG_Max: String(rngLastParams.max),
+      RNG_Timestamp: rngLastParams.timestamp,
+      RNG_Method: "WebCrypto getRandomValues + rejection sampling"
+    } : {};
+
+    $state.textContent = "Preparing transaction…";
+    const unsignedHex = await buildPostTx({ publicKey: loggedInPublicKey, body, extra });
+
+    if (!identityPopup || identityPopup.closed) openPopup(IDENTITY_ORIGIN + '/log-in?accessLevelRequest=2');
+    try { identityPopup.focus(); } catch {}
+    identityPopup.location.href = IDENTITY_ORIGIN + '/approve?tx=' + encodeURIComponent(unsignedHex);
+
+    $state.textContent = "Waiting for signature in popup…";
+    const signedHex = await waitForApprove();
+
+    $state.textContent = "Broadcasting…";
+    const hash = await submitTx(signedHex);
+
+    if (hash) {
+      const link = `https://explorer.deso.com/post/${hash}`;
+      $state.innerHTML = `Posted! Hash: <code>${hash}</code> — <a href="${link}" target="_blank" rel="noopener noreferrer">View in explorer</a>`;
+      $state.className = "status ok";
+    } else {
+      throw new Error("Broadcast finished without a hash.");
+    }
+  }catch(e){
+    console.error(e);
+    $state.textContent = e.message || "Error while posting.";
+    $state.className = "status err";
+  }
+}
+</script>
+</body>
+</html>
