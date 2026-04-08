@@ -1,15 +1,237 @@
 import h from './helpers.js';
 
-window.addEventListener('load', () => {
+window.addEventListener('load', async () => {
   const room = h.getQString(location.href, 'room');
   const roomTitle = h.getQString(location.href, 'title') || '';
-  const username = sessionStorage.getItem('username');
+  let username = (() => { try { return sessionStorage.getItem('username') || ''; } catch { return ''; } })();
 
   const log = (...a) => { try { console.log('[RTC]', ...a); } catch {} };
+
+  let meetingGatePollId = null;
+  let meetingGateTickId = null;
 
   function showMediaWarn(show) {
     const el = document.getElementById('media-warn');
     if (el) el.style.display = show ? 'block' : 'none';
+  }
+
+  function formatDateInZone(isoOrMs, timeZone, locale = 'en-GB') {
+    try {
+      return new Intl.DateTimeFormat(locale, {
+        timeZone,
+        day: '2-digit', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: false,
+      }).format(new Date(isoOrMs));
+    } catch {
+      return String(isoOrMs || '');
+    }
+  }
+
+  function formatDatePair(isoOrMs, timeZone = 'Europe/Zagreb') {
+    const local = formatDateInZone(isoOrMs, timeZone, 'en-GB');
+    const utc = formatDateInZone(isoOrMs, 'UTC', 'en-GB');
+    return `${local} Europe/Zagreb / ${utc} UTC`;
+  }
+
+  function getUsernameCacheKey(pubKey = '') {
+    const pk = String(pubKey || '').trim();
+    return pk ? `deso_username:${pk}` : 'deso_username';
+  }
+
+  function readCachedUsername(pubKey = '') {
+    const pk = String(pubKey || '').trim();
+    try {
+      const scoped = localStorage.getItem(getUsernameCacheKey(pk));
+      if (scoped) return scoped;
+    } catch {}
+    try {
+      const generic = localStorage.getItem('deso_username');
+      if (generic) return generic;
+    } catch {}
+    return '';
+  }
+
+  function persistResolvedUsername(pubKey = '', name = '') {
+    const clean = String(name || '').trim().replace(/^@+/, '');
+    if (!clean) return '';
+    username = clean;
+    try { sessionStorage.setItem('username', clean); } catch {}
+    try { localStorage.setItem('deso_username', clean); } catch {}
+    try {
+      const cacheKey = getUsernameCacheKey(pubKey);
+      if (cacheKey) localStorage.setItem(cacheKey, clean);
+    } catch {}
+    return clean;
+  }
+
+  async function resolveUsernameFromProfile(pubKey = '') {
+    const pk = String(pubKey || '').trim();
+    if (!pk) return '';
+
+    const cached = readCachedUsername(pk);
+    if (cached) return persistResolvedUsername(pk, cached);
+
+    try {
+      const res = await fetch('https://node.deso.org/api/v0/get-single-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ PublicKeyBase58Check: pk })
+      });
+      if (!res.ok) return '';
+      const data = await res.json();
+      const resolved = String(data?.Profile?.Username || '').trim();
+      return resolved ? persistResolvedUsername(pk, resolved) : '';
+    } catch (err) {
+      console.warn('Username lookup failed:', err);
+      return '';
+    }
+  }
+
+  async function checkScheduledRoomAccess(roomId) {
+    try {
+      const res = await fetch(`/api/meetings/access/${encodeURIComponent(roomId)}`);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+
+  function setHidden(id, hidden) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (hidden) el.setAttribute('hidden', 'hidden');
+    else el.removeAttribute('hidden');
+  }
+
+  function clearMeetingGateTimers() {
+    if (meetingGatePollId) { clearInterval(meetingGatePollId); meetingGatePollId = null; }
+    if (meetingGateTickId) { clearInterval(meetingGateTickId); meetingGateTickId = null; }
+  }
+
+  function hideMeetingGate() {
+    clearMeetingGateTimers();
+    setHidden('meeting-access-gate', true);
+    setHidden('room-create', true);
+    setHidden('username-set', true);
+  }
+
+  function renderMeetingGate(access = {}) {
+    const stateEl = document.getElementById('meeting-gate-state');
+    const titleEl = document.getElementById('meeting-gate-title');
+    const textEl = document.getElementById('meeting-gate-text');
+    const detailsEl = document.getElementById('meeting-gate-details');
+    const joinBtn = document.getElementById('meeting-gate-join-btn');
+    const refreshBtn = document.getElementById('meeting-gate-refresh-btn');
+    const tz = access?.meeting?.timezone || access?.timezone || 'Europe/Zagreb';
+    const title = access?.meeting?.title || roomTitle || room || 'Scheduled meeting';
+    const joinOpen = access?.joinOpensAtMs ? formatDatePair(access.joinOpensAtMs, tz) : 'unknown';
+    const startAt = access?.startsAtMs ? formatDatePair(access.startsAtMs, tz) : 'unknown';
+    const endAt = access?.endsAtMs ? formatDatePair(access.endsAtMs, tz) : 'unknown';
+    const now = Date.now();
+
+    const formatCountdown = (targetMs) => {
+      if (!targetMs || targetMs <= now) return '00:00:00';
+      const totalSec = Math.max(0, Math.floor((targetMs - now) / 1000));
+      const hh = String(Math.floor(totalSec / 3600)).padStart(2, '0');
+      const mm = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0');
+      const ss = String(totalSec % 60).padStart(2, '0');
+      return `${hh}:${mm}:${ss}`;
+    };
+
+    const joinOpensIn = access?.joinOpensAtMs && access.joinOpensAtMs > now ? formatCountdown(access.joinOpensAtMs) : null;
+    const meetingStartsIn = access?.startsAtMs && access.startsAtMs > now ? formatCountdown(access.startsAtMs) : null;
+
+    if (stateEl && access?.state === 'closed') stateEl.textContent = 'Meeting closed';
+    else if (stateEl && access?.canJoinNow) stateEl.textContent = 'Join is open';
+    else if (stateEl) stateEl.textContent = 'Scheduled meeting';
+
+    if (titleEl) titleEl.textContent = title;
+
+    if (textEl && access?.state === 'closed') {
+      textEl.innerHTML = '<span class="meeting-gate-text-strong">This meeting is no longer open.</span>';
+    } else if (textEl && access?.canJoinNow) {
+      textEl.innerHTML = '<span class="meeting-gate-text-strong">You can join this meeting now.</span>';
+    } else if (textEl) {
+      const summary = joinOpensIn ? `Join opens in ${joinOpensIn}` : 'You can join this meeting 15 minutes before it starts.';
+      textEl.innerHTML = `<span class="meeting-gate-text-strong">${summary}</span><br><span class="muted">Meeting starts ${startAt}.</span>`;
+    }
+
+    if (detailsEl) {
+      const stats = [];
+      if (access?.state === 'closed') {
+        stats.push(`<div class="meeting-gate-stat"><div class="meeting-gate-stat-label">Meeting ended</div><div class="meeting-gate-stat-value">Closed</div></div>`);
+      } else if (access?.canJoinNow) {
+        stats.push(`<div class="meeting-gate-stat"><div class="meeting-gate-stat-label">Join status</div><div class="meeting-gate-stat-value">Open now</div></div>`);
+      } else {
+        stats.push(`<div class="meeting-gate-stat"><div class="meeting-gate-stat-label">Join opens in</div><div class="meeting-gate-stat-value">${joinOpensIn || 'Soon'}</div></div>`);
+      }
+      stats.push(`<div class="meeting-gate-stat"><div class="meeting-gate-stat-label">Meeting starts in</div><div class="meeting-gate-stat-value">${meetingStartsIn || (access?.canJoinNow ? 'In progress' : 'Now')}</div></div>`);
+
+      const rows = [];
+      rows.push(`<div class="meeting-gate-grid">${stats.join('')}</div>`);
+      rows.push(`<div class="meeting-gate-line"><strong>Join opens</strong><span class="muted">${joinOpen}</span></div>`);
+      rows.push(`<div class="meeting-gate-line"><strong>Meeting starts</strong><span class="muted">${startAt}</span></div>`);
+      if (access?.state === 'closed') rows.push(`<div class="meeting-gate-line"><strong>Meeting ended</strong><span class="muted">${endAt}</span></div>`);
+      detailsEl.innerHTML = rows.join('');
+    }
+
+    if (joinBtn) {
+      joinBtn.hidden = !access?.canJoinNow;
+      joinBtn.disabled = !access?.canJoinNow;
+      joinBtn.textContent = access?.canJoinNow ? 'Join meeting now' : 'Waiting for join window…';
+    }
+    if (refreshBtn) refreshBtn.disabled = false;
+  }
+
+  async function showMeetingGate(access = {}) {
+    clearMeetingGateTimers();
+    try { localStopAll(); } catch {}
+    try {
+      hideMeetingGate();
+      const mainEl = document.querySelector('main.call-container.main');
+      if (mainEl) mainEl.style.display = '';
+      const overlay = document.getElementById('prejoin-overlay');
+      if (overlay) overlay.hidden = true;
+    } catch {}
+    setHidden('meeting-access-gate', false);
+    const main = document.querySelector('main.call-container.main');
+    if (main) main.style.display = 'none';
+    renderMeetingGate(access);
+
+    const refreshBtn = document.getElementById('meeting-gate-refresh-btn');
+    const joinBtn = document.getElementById('meeting-gate-join-btn');
+    if (refreshBtn) refreshBtn.onclick = async () => {
+      const latest = await checkScheduledRoomAccess(room);
+      if (latest?.canJoinNow) {
+        hideMeetingGate();
+        const main2 = document.querySelector('main.call-container.main');
+        if (main2) main2.style.display = '';
+        showPrejoinOverlay();
+      } else {
+        renderMeetingGate(latest || access);
+      }
+    };
+    if (joinBtn) joinBtn.onclick = async () => {
+      hideMeetingGate();
+      const main2 = document.querySelector('main.call-container.main');
+      if (main2) main2.style.display = '';
+      showPrejoinOverlay();
+    };
+
+    if (access?.state === 'before_open') {
+      meetingGateTickId = setInterval(() => renderMeetingGate(access), 1000);
+      meetingGatePollId = setInterval(async () => {
+        const latest = await checkScheduledRoomAccess(room);
+        if (!latest) return;
+        access = latest;
+        renderMeetingGate(access);
+        if (latest.canJoinNow) {
+          clearMeetingGateTimers();
+        }
+      }, 5000);
+    }
   }
 
   function promptLoginRetry(message = '') {
@@ -32,15 +254,24 @@ window.addEventListener('load', () => {
     const rc = document.querySelector('#room-create');
     if (rc) rc.attributes.removeNamedItem('hidden');
     return;
-  } else if (!username) {
-    const us = document.querySelector('#username-set');
-    if (us) us.attributes.removeNamedItem('hidden');
   }
 
   const desoKey = localStorage.getItem('deso_user_key');
   if (!desoKey) {
     promptLoginRetry('Please log in with your DeSo account to join this room.');
     return;
+  }
+
+  if (!username) {
+    const resolved = await resolveUsernameFromProfile(desoKey);
+    if (resolved) username = resolved;
+  }
+
+  if (!username) {
+    const us = document.querySelector('#username-set');
+    if (us) us.attributes.removeNamedItem('hidden');
+  } else {
+    setHidden('username-set', true);
   }
 
   // ------- Socket.io -------
@@ -60,6 +291,29 @@ window.addEventListener('load', () => {
     let msg = 'You are not allowed to create this room. Please contact the administrator.';
     if (reason === 'MISSING_TITLE') msg = 'Room title is required. Please provide a title.';
     if (reason === 'MISSING_ROOM')  msg = 'Room ID is missing.';
+    if (reason === 'SCHEDULED_TOO_EARLY') {
+      const joinOpen = payload.joinOpensAtMs ? formatDatePair(payload.joinOpensAtMs, payload.timezone || 'Europe/Zagreb') : 'unknown';
+      const startAt = payload.startsAtMs ? formatDatePair(payload.startsAtMs, payload.timezone || 'Europe/Zagreb') : 'unknown';
+      msg = `This meeting can be joined only 15 minutes before the start.\n\nJoin opens: ${joinOpen}\nMeeting starts: ${startAt}`;
+    }
+    if (reason === 'SCHEDULED_CLOSED') {
+      const closedAt = payload.joinClosesAtMs ? formatDatePair(payload.joinClosesAtMs, payload.timezone || 'Europe/Zagreb') : 'unknown';
+      msg = `This meeting is no longer open.\n\nJoin window ended: ${closedAt}`;
+    }
+    const scheduledPayload = {
+      state: reason === 'SCHEDULED_TOO_EARLY' ? 'before_open' : (reason === 'SCHEDULED_CLOSED' ? 'closed' : 'error'),
+      canJoinNow: false,
+      meeting: { title: payload.title || roomTitle || room, timezone: payload.timezone || 'Europe/Zagreb' },
+      timezone: payload.timezone || 'Europe/Zagreb',
+      joinOpensAtMs: payload.joinOpensAtMs || null,
+      joinClosesAtMs: payload.joinClosesAtMs || null,
+      startsAtMs: payload.startsAtMs || null,
+      endsAtMs: payload.endsAtMs || null,
+    };
+    if (reason === 'SCHEDULED_TOO_EARLY' || reason === 'SCHEDULED_CLOSED') {
+      showMeetingGate(scheduledPayload);
+      return;
+    }
     alert(msg);
     try { localStopAll(); } catch {}
     window.location.href = '/';
@@ -182,12 +436,15 @@ window.addEventListener('load', () => {
   }
 
   function getMyDisplayName() {
+    if (username) return formatDisplayName(username);
     try {
       const sessionName = sessionStorage.getItem('username');
       if (sessionName) return formatDisplayName(sessionName);
     } catch {}
     try {
       const key = localStorage.getItem('deso_user_key');
+      const cached = readCachedUsername(key);
+      if (cached) return formatDisplayName(cached);
       if (key) return formatDisplayName(key);
     } catch {}
     return 'Guest';
@@ -491,6 +748,23 @@ window.addEventListener('load', () => {
   // ===== Prejoin Overlay =====
   async function showPrejoinOverlay() {
     try {
+      const access = await checkScheduledRoomAccess(room);
+      if (access?.isScheduled && !access?.canJoinNow) {
+        const joinOpen = access.joinOpensAtMs ? formatDatePair(access.joinOpensAtMs, access.meeting?.timezone || access.timezone || 'Europe/Zagreb') : 'unknown';
+        const startAt = access.startsAtMs ? formatDatePair(access.startsAtMs, access.meeting?.timezone || access.timezone || 'Europe/Zagreb') : 'unknown';
+        if (access.state === 'before_open') {
+          await showMeetingGate(access);
+          return;
+        }
+        if (access.state === 'closed') {
+          await showMeetingGate(access);
+          return;
+        }
+      }
+
+      hideMeetingGate();
+      const mainEl = document.querySelector('main.call-container.main');
+      if (mainEl) mainEl.style.display = '';
       const overlay = document.getElementById('prejoin-overlay');
       const videoEl = document.getElementById('prejoin-preview');
       const joinBtn = document.getElementById('prejoin-join-btn');
@@ -897,12 +1171,14 @@ window.addEventListener('load', () => {
 
   // ------- cleanup -------
   window.addEventListener('deso:logout', () => {
+    clearMeetingGateTimers();
     try { localStopAll(); } catch {}
     try { Object.keys(pc).forEach(id => closePeer(id, 'logout')); } catch {}
     try { socket?.close(); } catch {}
     window.__rtcCleaned = true;
   });
   window.addEventListener('beforeunload', () => {
+    clearMeetingGateTimers();
     try { Object.keys(pc).forEach(id => closePeer(id, 'beforeunload')); } catch {}
     try { localStopAll(); } catch {}
   });

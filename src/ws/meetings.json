@@ -1,0 +1,24 @@
+[
+  {
+    "id": "mtg_1775683254732_8r54yv",
+    "title": "Night talk",
+    "description": "Updated version + reminder + @username",
+    "roomId": "nt-5",
+    "scheduledFor": "2026-04-08T21:40:00.000Z",
+    "durationMin": 60,
+    "timezone": "Europe/Zagreb",
+    "createdAt": "2026-04-08T21:20:54.732Z",
+    "updatedAt": "2026-04-08T21:21:40.754Z",
+    "createdBy": "BC1YLhUQS3L6kn7biWxa3LCXe1KmzGDro6TFo3Jro2Bi3n31EKZyUoJ",
+    "createdByName": "StevoNagy",
+    "participantMentions": [
+      "test_sn"
+    ],
+    "isPrivate": false,
+    "password": "",
+    "invitePostHashHex": "96e46a8000b0abb20dd06adab8895a8a0d9ffb2590fb27d4c1fd804d7a95fca4",
+    "invitePostedAt": "2026-04-08T21:20:59.163Z",
+    "reminderPostHashHex": "",
+    "reminderPostedAt": null
+  }
+]

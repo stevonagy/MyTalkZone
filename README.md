@@ -1,6 +1,6 @@
 # MyTalkZone v3.0
 
-Browser-based decentralized real-time video meetings with **Node.js**, **Socket.IO**, **WebRTC**, and **DeSo-based identity**.
+Browser-based decentralized real-time video meetings built with **Node.js**, **Socket.IO**, **WebRTC**, and **DeSo-based identity**.
 
 **Credits**  
 Developed by: **Stevo Nagy & ChatGPT (OpenAI)**  
@@ -10,108 +10,120 @@ Base version: **MyTalkZone v1.4**
 
 ## Overview
 
-MyTalkZone is a browser-based live communication platform for creating and joining video rooms directly from the browser. It combines WebRTC peer-to-peer media, Socket.IO signaling, TURN/STUN connectivity support, and DeSo-linked identity for usernames and profile context.
+MyTalkZone is a browser-based live communication platform for creating and joining video rooms directly from the browser. It combines WebRTC peer-to-peer media, Socket.IO signaling, TURN/STUN connectivity support, and DeSo-linked identity for usernames, profile avatars, and meeting invite posts.
 
-From **v2.0 onward**, the app is integrated with **DeSo** for authentication, usernames, and profile avatars. In **v3.0**, the project adds a cleaner admin flow, visible participant name labels in live rooms, policy-linked audio-only scaling, and a more polished hub/call experience.
+From **v2.0 onward**, the app is integrated with **DeSo** for authentication, usernames, and profile context. In the latest **v3.0** build, the project adds:
 
----
-
-## What's New in v3.0
-
-### 1. Admin cleanup and policy flow improvements
-- Cleaned up the **Admin** page structure.
-- Removed duplicated/conflicting admin-side logic.
-- Improved save flow for:
-  - **Allowed creators**
-  - **Audio-only above N participants**
-- Restored a clear **Exit** button in the admin page.
-
-### 2. Participant name labels inside live rooms
-- Participants are now displayed directly on video tiles using their **DeSo username**.
-- Local participant label is shown as a local badge.
-- Remote participant labels are synchronized when users join or rejoin a room.
-- Username labels are intentionally kept out of the visible chat feed and handled as internal signaling metadata.
-
-### 3. Audio-only scaling linked to admin policy
-- The audio-only threshold is no longer just a frontend hardcoded value.
-- The live room now uses the **policy-defined** `audioOnlyAbove` value set in Admin.
-- This keeps scaling behavior aligned with the current room policy.
-
-### 4. Hub polish and versioning
-- Updated hub branding to **MyTalkZone v3.0**.
-- Added a version/update note in the Hub.
-- Maintained the DeSo login-based room creation gate for whitelisted users.
-
-### 5. Call UI polish
-- Cleaner participant badges.
-- Removed the red unread notification dot from the chat icon.
-- Improved chat drawer layout and general visual consistency.
+- scheduled meetings
+- DeSo invite posting
+- 10-minute reminder posting
+- time-gated meeting entry
+- a waiting/join page for scheduled calls
+- automatic cleanup of upcoming meetings once the room becomes live
+- Europe/Zagreb + UTC time display for meeting information
 
 ---
 
-## Version History
+## What’s New in the Latest v3.0 Build
 
-## v3.0 — Admin, identity labels, and policy-linked scaling
-This release focuses on stability, room visibility, and better day-to-day usability.
+### 1. Scheduled meetings
+Whitelisted creators can now schedule meetings in advance from the Hub.
 
-### Highlights
-- Admin page cleanup
-- Stable allowed-creators editing flow
-- Policy-linked audio-only threshold
-- In-room participant username badges
-- Hub branding update to **v3.0**
-- Improved call UI polish
-- Hidden chat notification dot
+Each meeting stores:
+- title
+- description
+- room ID
+- start time
+- duration
+- tagged DeSo usernames
+- creator metadata
+- invite/reminder post hashes
 
----
+Meetings are persisted in `src/ws/meetings.json`, so they survive server restarts.
 
-## v2.0 — DeSo integration & UI enhancements
-This release introduced blockchain-linked identity, avatars, and improved user experience across both Hub and call views.
+### 2. DeSo invite posts
+After creating a scheduled meeting, the creator can publish an invite post to DeSo.
 
-### Main features
-- DeSo username display
-- DeSo profile avatars in room cards
-- Room title display in the top bar
-- Stable room creation and join synchronization
-- Cleaner UI across hub and room views
-- No dependency on external profile fetches during room creation; client session data is reused
+The invite post includes:
+- meeting title
+- scheduled time
+- duration
+- join link
+- description
+- tagged participants
 
----
+The post is signed through the DeSo approval flow and only marked as posted after a successful blockchain submission.
 
-## v1.5 — Dynamic video scaling
-This release introduced adaptive quality scaling based on room size.
+### 3. Reminder posts
+Starting **10 minutes before the meeting**, the creator or master admin can publish a reminder post.
 
-### Scale profiles
-- **1–8 participants**: 720p @ 30fps, ~1800 kbps
-- **9–14 participants**: 540p @ 24fps, ~1200 kbps
-- **15+ participants**: 360p @ 20fps, ~600 kbps
-- Optional **audio-only mode** when participants exceed the configured threshold
+Rules:
+- reminder is available only if the initial invite was already posted
+- reminder can be posted only once
+- reminder remains available until the meeting ends
 
-> In v3.0, the threshold is tied to admin policy rather than relying only on a frontend constant.
+### 4. Time-gated access to scheduled meetings
+Scheduled meetings cannot be opened at any time.
 
----
+Join rules:
+- entry opens **15 minutes before the scheduled start**
+- entry remains open during the meeting
+- entry remains open for a limited grace period after the meeting ends
 
-## v1.4 — Stable base release
-The first solid production-style version of the platform, featuring:
-- Multi-room video meetings
-- TURN/STUN connectivity support
-- Socket.IO signaling
-- WebRTC peer-to-peer media
-- Responsive browser UI for desktop and mobile
+If a user opens the join link too early, the `/call` page shows a waiting screen instead of joining immediately.
+
+### 5. Waiting page for early arrivals
+If someone opens a scheduled meeting before the join window, the call page displays:
+- a scheduled meeting notice
+- join opening time
+- meeting start time
+- countdown to join opening
+- countdown to meeting start
+- a **Join meeting** button that appears when access becomes available
+
+### 6. Live room / upcoming meeting cleanup
+Once the first participant enters and the scheduled meeting becomes a real live room:
+- the meeting remains visible in **Live rooms**
+- it is automatically hidden from **Upcoming meetings**
+
+This avoids showing the same meeting twice.
+
+### 7. Europe/Zagreb + UTC meeting times
+Scheduled meeting cards now display times in both:
+- `Europe/Zagreb`
+- `UTC`
+
+This applies to:
+- meeting start time
+- join opening time
+- invite posted time
+- reminder posted time
+
+### 8. Existing v3.0 improvements retained
+The latest build still includes the previously added v3.0 improvements:
+- DeSo username labels on video tiles
+- admin cleanup and policy editing
+- policy-linked audio-only scaling
+- improved Hub and Call UI polish
 
 ---
 
 ## Core Features
 
 - Browser-based real-time video rooms
+- WebRTC peer-to-peer audio/video
+- Socket.IO signaling
 - DeSo login and identity-aware room usage
-- Whitelist-based room creation policy
+- Whitelist-based room creation and meeting scheduling
+- In-room participant name badges
 - In-room live chat
 - TURN/STUN fallback for NAT and firewall traversal
 - Dynamic video quality scaling
 - Optional audio-only behavior for larger rooms
-- Hub page for browsing, searching, and joining active rooms
+- Hub page for browsing, searching, and joining live rooms
 - Admin page for creator policy management
+- Scheduled meetings with persistence
+- DeSo invite and reminder post flow
 
 ---
 
@@ -120,21 +132,32 @@ The first solid production-style version of the platform, featuring:
 ```text
 MyTalkZone3.0/
 ├── src/
-│   ├── app.js                 # Main server entry point
-│   ├── hub.html               # Rooms hub UI
+│   ├── app.js                 # Main server entry point + REST API
+│   ├── index.html             # Call page / waiting page / prejoin flow
+│   ├── hub.html               # Hub UI for rooms and scheduled meetings
 │   ├── admin.html             # Admin UI for policy management
 │   ├── ws/
 │   │   ├── stream.js          # Socket / signaling handlers
-│   │   └── roomsStore.js      # In-memory room metadata store
+│   │   ├── roomsStore.js      # In-memory live room metadata store
+│   │   ├── meetingsStore.js   # Scheduled meeting storage + time gating
+│   │   ├── meetings.json      # Persisted scheduled meetings
+│   │   ├── loadPolicy.js      # Policy loader/writer
+│   │   ├── roomPolicy.js      # Policy helpers
+│   │   └── roomPolicy.json    # Master key / allowed creators / thresholds
 │   ├── assets/
 │   │   ├── js/
-│   │   │   ├── rtc.js         # WebRTC, signaling, participant labels, scaling
-│   │   │   ├── hub.js         # Hub room listing/search/join UI
-│   │   │   ├── admin.js       # Admin policy editor logic
+│   │   │   ├── rtc.js         # WebRTC, join flow, meeting gate UI
+│   │   │   ├── hub.js         # Live room listing/search/join UI
+│   │   │   ├── meetings.js    # Scheduled meeting UI / CRUD / rendering
+│   │   │   ├── deso-post.js   # DeSo invite/reminder posting flow
 │   │   │   ├── deso.js        # DeSo login/session helpers
-│   │   │   └── helpers.js     # Shared client helpers
+│   │   │   ├── admin.js       # Admin policy editor logic
+│   │   │   ├── names.js       # Participant label helpers
+│   │   │   ├── helpers.js     # Shared client helpers
+│   │   │   ├── chat-ui.js     # Chat interactions
+│   │   │   └── stage.js       # Layout / stage helpers
 │   │   ├── css/
-│   │   │   └── app.css        # Shared app styling
+│   │   │   └── app.css        # Shared styling
 │   │   └── img/               # Static images/icons
 ├── package.json               # Node.js dependencies
 └── README.md                  # Project documentation
@@ -144,15 +167,24 @@ MyTalkZone3.0/
 
 ## High-Level Flow
 
-1. User opens the application in the browser.
-2. User logs in with a **DeSo account**.
-3. User browses the hub or opens a room directly.
-4. Server validates room creation rights based on policy.
-5. Client connects to the server through **Socket.IO** signaling.
-6. Peers negotiate **WebRTC** connections.
-7. Media streams flow peer-to-peer, with **TURN** fallback when needed.
-8. Room UI shows participant identity badges using DeSo usernames.
-9. Scaling logic adjusts quality and can switch to audio-only mode based on policy.
+### Live room flow
+1. User opens the app.
+2. User logs in with a DeSo account.
+3. User browses the Hub or opens a room directly.
+4. Server validates room creation rights according to policy.
+5. Client connects through Socket.IO signaling.
+6. Peers negotiate WebRTC connections.
+7. Media flows peer-to-peer, with TURN fallback when needed.
+8. Video tiles show DeSo-linked participant labels.
+
+### Scheduled meeting flow
+1. A whitelisted creator creates a scheduled meeting.
+2. Meeting metadata is saved in `meetings.json`.
+3. Creator optionally publishes a DeSo invite post.
+4. Users can open the meeting link, but entry is blocked until the join window opens.
+5. When entry becomes available, the first participant creates the live room.
+6. The scheduled meeting disappears from **Upcoming meetings** and the room appears in **Live rooms**.
+7. Ten minutes before start time, the creator can publish a DeSo reminder post.
 
 ---
 
@@ -160,21 +192,32 @@ MyTalkZone3.0/
 
 ### Server
 - `roomPolicy.json` — stores the master key, allowed creators, and audio-only threshold
-- `roomsStore.js` — keeps an in-memory list of active rooms and runtime metadata
+- `roomsStore.js` — keeps in-memory active room metadata
+- `meetings.json` — stores scheduled meetings persistently
 
 ### Browser
 - `localStorage["deso_user_key"]` — DeSo public key
-- `sessionStorage["username"]` — DeSo username used in the current browser session
+- `sessionStorage["username"]` — DeSo username for the current MyTalkZone browser session
+- additional DeSo identity/session payloads may be stored by the login / post flow
 
 ---
 
 ## Main Routes
 
-- `/` — Main app / room entry flow
-- `/hub` — Browse, search, and join active rooms
-- `/admin` — Admin interface for master policy management
+### Pages
+- `/` — Hub page
+- `/call` — Call page / prejoin / scheduled waiting page
+- `/admin` — Admin page
+
+### API
 - `/api/policy` — Get/update room policy
-- `/api/rooms` — Active room listing used by the hub and room checks
+- `/api/rooms` — Live room listing for the hub
+- `/api/can-create` — Lightweight permission check
+- `/api/meetings` — List/create scheduled meetings
+- `/api/meetings/:id` — Update/delete scheduled meetings
+- `/api/meetings/access/:roomId` — Scheduled access check for join gating
+- `/api/meetings/:id/invite-posted` — Mark invite as posted
+- `/api/meetings/:id/reminder-posted` — Mark reminder as posted
 
 ---
 
@@ -188,10 +231,25 @@ node src/app.js
 Open in browser:
 
 ```text
-/        -> main app / room flow
-/hub     -> rooms hub
-/admin   -> admin policy page
+/        -> hub
+/call    -> call page
+/admin   -> admin page
 ```
+
+---
+
+## DeSo Identity Notes
+
+MyTalkZone uses DeSo identity data in two different ways:
+
+1. **Public key** is stored in `localStorage`
+2. **Username** is stored in `sessionStorage`
+
+This means:
+- if you enter a room from inside MyTalkZone after logging in, the app usually shows your `@username`
+- if you open a direct `/call?...` link in a fresh browser tab or session where MyTalkZone has no username in `sessionStorage`, the app may fall back to your DeSo public key and display a shortened wallet address instead
+
+This is expected with the current architecture and can be improved later by auto-resolving usernames on the call page when only the public key is known.
 
 ---
 
@@ -202,10 +260,10 @@ Typical production setup used in this project:
 - Node.js
 - PM2
 - Nginx reverse proxy
-- HTTPS via Certbot / Let's Encrypt
+- HTTPS via Certbot / Let’s Encrypt
 - TURN server for WebRTC fallback
 
-If deploying by copy script or ZIP, make sure the app lands with this structure:
+If deploying by ZIP or copy script, make sure the app lands with this structure:
 
 ```text
 <deploy-root>/src/app.js
@@ -227,12 +285,14 @@ because PM2 may still expect:
 
 ---
 
-## Notes
+## Current Behaviour Summary
 
-- Room creation is intentionally restricted to whitelisted DeSo users.
-- Participant labels improve room clarity without polluting visible chat history.
-- Audio-only behavior can be tuned from the admin interface.
-- TURN credentials and infrastructure remain deployment-specific.
+- Room creation is restricted to whitelisted DeSo users.
+- Scheduled meeting creation is also restricted to whitelisted users.
+- Scheduled meeting links can be opened early, but actual entry is blocked until the join window opens.
+- Upcoming meetings disappear once the live room becomes active.
+- Invite and reminder posts require explicit user approval through the DeSo flow.
+- Participant labels are best when MyTalkZone already knows the user’s DeSo username in the current session.
 
 ---
 

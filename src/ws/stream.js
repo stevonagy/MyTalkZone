@@ -2,6 +2,7 @@
 // Uses loadPolicy + roomsStore; emits 'subscribed' for UI to unhide controls.
 
 const roomsStore = require('./roomsStore');
+const meetingsStore = require('./meetingsStore');
 const { readPolicy } = require('./loadPolicy');
 
 function isCreatorAllowed(pub) {
@@ -53,19 +54,50 @@ module.exports = function attachStreamNamespace(io) {
       }
 
       const exists = roomExistsInStore(roomName);
+      const scheduledAccess = meetingsStore.getJoinAccess(roomName);
+      const scheduledMeeting = scheduledAccess.canJoinNow ? scheduledAccess.meeting : null;
+
+      if (scheduledAccess.isScheduled && !scheduledAccess.canJoinNow) {
+        socket.emit('room-create-denied', {
+          reason: scheduledAccess.state === 'before_open' ? 'SCHEDULED_TOO_EARLY' : 'SCHEDULED_CLOSED',
+          room: roomName,
+          meetingId: scheduledAccess.meeting?.id || null,
+          title: scheduledAccess.meeting?.title || roomName,
+          timezone: scheduledAccess.meeting?.timezone || 'Europe/Zagreb',
+          scheduledFor: scheduledAccess.meeting?.scheduledFor || null,
+          joinOpensAtMs: scheduledAccess.joinOpensAtMs,
+          joinClosesAtMs: scheduledAccess.joinClosesAtMs,
+          startsAtMs: scheduledAccess.startsAtMs,
+          endsAtMs: scheduledAccess.endsAtMs,
+        });
+        return;
+      }
+
       if (!exists) {
-        // CREATE path needs title + permission
-        if (!title || !String(title).trim()) {
-          socket.emit('room-create-denied', { reason: 'MISSING_TITLE' });
-          return;
-        }
         const pk = socket.desoPublicKey;
-        if (!isCreatorAllowed(pk)) {
-          socket.emit('room-create-denied', { reason: 'NOT_ALLOWED' });
-          return;
-        }
-        if (typeof roomsStore.upsertOnCreate === 'function') {
-          roomsStore.upsertOnCreate({ id: roomName, title: String(title).trim(), createdBy: pk, createdByName: createdByName || null });
+
+        if (scheduledMeeting) {
+          if (typeof roomsStore.upsertOnCreate === 'function') {
+            roomsStore.upsertOnCreate({
+              id: roomName,
+              title: scheduledMeeting.title || title || roomName,
+              createdBy: scheduledMeeting.createdBy || pk,
+              createdByName: scheduledMeeting.createdByName || createdByName || null,
+            });
+          }
+        } else {
+          // CREATE path needs title + permission
+          if (!title || !String(title).trim()) {
+            socket.emit('room-create-denied', { reason: 'MISSING_TITLE' });
+            return;
+          }
+          if (!isCreatorAllowed(pk)) {
+            socket.emit('room-create-denied', { reason: 'NOT_ALLOWED' });
+            return;
+          }
+          if (typeof roomsStore.upsertOnCreate === 'function') {
+            roomsStore.upsertOnCreate({ id: roomName, title: String(title).trim(), createdBy: pk, createdByName: createdByName || null });
+          }
         }
       }
 
@@ -76,7 +108,16 @@ module.exports = function attachStreamNamespace(io) {
       nsp.emit('rooms:update');
 
       // Let UI show controls
-      socket.emit('subscribed', { room: roomName, created: !exists });
+      socket.emit('subscribed', {
+        room: roomName,
+        created: !exists,
+        scheduledMeeting: scheduledMeeting ? {
+          id: scheduledMeeting.id,
+          title: scheduledMeeting.title,
+          scheduledFor: scheduledMeeting.scheduledFor,
+          durationMin: scheduledMeeting.durationMin,
+        } : null,
+      });
 
       // Wire per-room handlers
       wireRoomHandlers(socket, roomName);

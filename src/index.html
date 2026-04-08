@@ -135,6 +135,23 @@
     </div>
   </section>
 
+  <section id="meeting-access-gate" hidden class="call-container gate">
+    <div class="hero meeting-hero meeting-gate-panel">
+      <div class="meeting-gate-icon" aria-hidden="true"><i class="far fa-clock"></i></div>
+      <div class="meeting-gate-copy">
+        <div id="meeting-gate-state" class="meeting-gate-state">Scheduled meeting</div>
+        <h1 id="meeting-gate-title">Meeting not open yet</h1>
+        <p id="meeting-gate-text" class="muted">You can join this meeting 15 minutes before it starts.</p>
+      </div>
+      <div id="meeting-gate-details" class="meeting-gate-details"></div>
+      <div class="hero-tools meeting-gate-actions" style="margin-top:14px;">
+        <button id="meeting-gate-join-btn" class="ghost" type="button" hidden>Join meeting</button>
+        <button id="meeting-gate-refresh-btn" class="ghost" type="button">Refresh status</button>
+        <a href="/" class="chip-link">Back to hub</a>
+      </div>
+    </div>
+  </section>
+
   <main class="call-container main">
     <div class="video-wrap">
       <div id="videos">

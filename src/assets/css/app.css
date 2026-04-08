@@ -382,3 +382,94 @@ body.call-page{
   opacity: 0.78;
 }
 
+
+
+/* Shared buttons / meeting gate */
+.ghost{
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  min-height:42px; padding:0 14px;
+  border:1px solid var(--mz-border-strong);
+  border-radius:12px;
+  background: rgba(255,255,255,.03);
+  color: var(--mz-text);
+  cursor:pointer;
+  text-decoration:none;
+}
+.ghost:hover{ background: rgba(255,255,255,.07); }
+.ghost:disabled{ opacity:.55; cursor:default; }
+.wide{ width:100%; }
+.meeting-hero{ max-width: 760px; }
+.meeting-gate-panel{
+  max-width: 860px;
+  padding: 28px 24px;
+}
+.meeting-gate-icon{
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  border-radius: 20px;
+  margin-bottom: 16px;
+  color: #fff;
+  font-size: 30px;
+  background: linear-gradient(135deg, rgba(109,40,217,.85), rgba(6,182,212,.85));
+  box-shadow: 0 12px 32px rgba(6,182,212,.22);
+}
+.meeting-gate-copy h1{
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  line-height: 1.1;
+  margin: 0;
+}
+.meeting-gate-state{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  margin-bottom:10px;
+  padding:6px 12px;
+  border-radius:999px;
+  border:1px solid var(--mz-border);
+  background: rgba(255,255,255,.04);
+  color: #dbeafe;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+.meeting-gate-text-strong{
+  font-size: 1.05rem;
+  color: #eaf2ff;
+}
+.meeting-gate-details{
+  display:grid;
+  gap:12px;
+  margin-top:16px;
+}
+.meeting-gate-grid{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap:12px;
+}
+.meeting-gate-stat,
+.meeting-gate-line{
+  padding:14px 16px;
+  border-radius:16px;
+  border:1px solid var(--mz-border);
+  background: rgba(255,255,255,.03);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
+}
+.meeting-gate-stat-value{
+  margin-top:6px;
+  font-size: clamp(1.2rem, 2vw, 1.7rem);
+  font-weight: 800;
+  letter-spacing: .02em;
+  color: #fff;
+}
+.meeting-gate-stat-label,
+.meeting-gate-line strong{ color: var(--mz-text); }
+.meeting-gate-line .muted{ display:block; margin-top:4px; }
+.meeting-gate-actions{ margin-top:18px; }
+@media (max-width: 767px) {
+  .meeting-gate-panel{ padding: 22px 16px; }
+  .meeting-gate-icon{ width:60px; height:60px; border-radius:16px; font-size:24px; }
+  .meeting-gate-grid{ grid-template-columns: 1fr; }
+}

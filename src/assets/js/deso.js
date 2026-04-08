@@ -80,6 +80,7 @@ function showLoggedInUI(publicKey) {
 function triggerAppLogout() {
   try {
     localStorage.removeItem("deso_user_key");
+    localStorage.removeItem("deso_identity_users");
     sessionStorage.clear();
   } catch {}
   // Ask rtc.js to clean up call first
@@ -121,13 +122,26 @@ window.addEventListener("message", (event) => {
   const { id, method, payload, service } = event.data;
 
   if (method === "initialize") {
-    loginPopup?.postMessage({ id, service, payload: {} }, "*");
+    try {
+      if (loginPopup && !loginPopup.closed) {
+        loginPopup.postMessage({ id, service, payload: {} }, event.origin || "*");
+      }
+    } catch {}
+    try {
+      const approvePopup = window.__desoApprovePopup;
+      if (approvePopup && !approvePopup.closed) {
+        approvePopup.postMessage({ id, service, payload: {} }, event.origin || "*");
+      }
+    } catch {}
   }
 
-  if (method === "login") {
+  if (method === "login" && payload?.publicKeyAdded) {
     const publicKey = payload.publicKeyAdded;
     loggedInPublicKey = publicKey;
     localStorage.setItem("deso_user_key", publicKey);
+    if (payload?.users) {
+      localStorage.setItem("deso_identity_users", JSON.stringify(payload.users));
+    }
     showLoggedInUI(publicKey);
 
     // Let rtc.js know it can proceed without leaving this page
@@ -160,6 +174,13 @@ async function fetchUserProfile(publicKey) {
     });
     const profileJson = await profileRes.json();
     desoUsername = profileJson?.Profile?.Username || publicKey;
+    try {
+      const cleanUsername = String(desoUsername || '').trim().replace(/^@+/, '');
+      if (cleanUsername) {
+        localStorage.setItem('deso_username', cleanUsername);
+        localStorage.setItem(`deso_username:${publicKey}`, cleanUsername);
+      }
+    } catch {}
 
     const balanceRes = await fetch("https://node.deso.org/api/v0/get-users-stateless", {
       method: "POST",
